@@ -3,83 +3,88 @@ import { api } from "../../routes/api";
 
 export default function BookRoom() {
   const [rooms, setRooms] = useState([]);
+  const [loadingRooms, setLoadingRooms] = useState(false);
 
+  // form
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [roomId, setRoomId] = useState("");
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
-  const [guests, setGuests] = useState("");
+  const [guests, setGuests] = useState(1);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setLoadingRooms(true);
+        const res = await api.get("/api/rooms?active=true");
+        setRooms(res.data || []);
+      } catch (e) {
+        alert(e?.response?.data?.message || "Rooms load failed");
+      } finally {
+        setLoadingRooms(false);
+      }
+    })();
+  }, []);
 
   const selectedRoom = useMemo(
-    () => rooms.find((r) => String(r._id) === String(roomId)),
+    () => rooms.find((r) => r._id === roomId),
     [rooms, roomId]
   );
 
-  // simple nights calc
   const nights = useMemo(() => {
-    if (!checkIn || !checkOut) return 1;
+    if (!checkIn || !checkOut) return 0;
     const inD = new Date(checkIn);
     const outD = new Date(checkOut);
     const diff = Math.ceil((outD - inD) / (1000 * 60 * 60 * 24));
-    return Number.isFinite(diff) && diff > 0 ? diff : 1;
+    return diff > 0 ? diff : 0;
   }, [checkIn, checkOut]);
 
-  const fetchRooms = async () => {
-    // NOTE: backend should return active rooms only OR filter here
-    const res = await api.get("/api/rooms?active=true");
-
-    // if your backend returns all rooms, keep only active:
-    const onlyActive = Array.isArray(res.data) ? res.data.filter((r) => r.isActive !== false) : [];
-    setRooms(onlyActive);
-  };
-
-  useEffect(() => {
-    fetchRooms();
-  }, []);
+  const total = useMemo(() => {
+    if (!selectedRoom) return 0;
+    return (selectedRoom.price || 0) * (nights || 0);
+  }, [selectedRoom, nights]);
 
   const submitBooking = async (e) => {
     e.preventDefault();
-    try {
-      if (!name || !phone || !roomId || !checkIn || !checkOut || !guests) {
-        return alert("Fill all fields");
-      }
 
-      // booking API (agar tumhara endpoint different hai, bata dena)
+    if (!name || !phone || !roomId || !checkIn || !checkOut) {
+      alert("All fields required");
+      return;
+    }
+
+    try {
       await api.post("/api/bookings", {
         name,
         phone,
-        roomId,
+        room: roomId, // ✅ backend expects "room"
         checkIn,
         checkOut,
         guests: Number(guests),
       });
 
-      alert("Booking submitted! Admin panel me show hoga.");
-
+      alert("Booking submitted!");
       setName("");
       setPhone("");
       setRoomId("");
       setCheckIn("");
       setCheckOut("");
-      setGuests("");
+      setGuests(1);
     } catch (err) {
       alert(err?.response?.data?.message || "Booking failed");
     }
   };
 
-  // ✅ FULL payNow
   const payNow = async () => {
     try {
-      if (!roomId) return alert("Select room first");
-      if (!checkIn || !checkOut) return alert("Select check-in & check-out");
+      if (!roomId) return alert("Select a room first");
+      if (!nights) return alert("Select valid dates first");
 
       const res = await api.post("/api/payments/checkout-room", {
         roomId,
         nights,
       });
 
-      // Stripe checkout URL
       window.location.href = res.data.url;
     } catch (err) {
       alert(err?.response?.data?.message || "Payment failed");
@@ -87,79 +92,90 @@ export default function BookRoom() {
   };
 
   return (
-    <div className="max-w-xl mx-auto">
-      <div className="text-center mb-6">
-        <h1 className="text-4xl font-black">Book a Room</h1>
-        <p className="text-white/60 mt-2">Luxury stay reservation request + optional payment.</p>
-      </div>
+    <div className="min-h-[70vh] flex items-center justify-center px-4 py-12">
+      <div className="w-full max-w-xl rounded-3xl border border-[#3a2f12] bg-black/70 backdrop-blur p-6 md:p-8 shadow-[0_0_0_1px_rgba(255,215,0,0.08)]">
+        <h1 className="text-3xl md:text-4xl font-extrabold text-white">
+          Book a Room
+        </h1>
+        <p className="mt-2 text-sm text-[#d7c58a]">
+          Luxury stay reservation request + optional payment.
+        </p>
 
-      <form onSubmit={submitBooking} className="lux-card p-6 grid gap-4">
-        <input
-          className="lux-border bg-black/40 rounded-xl px-4 py-3 outline-none"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Full Name"
-        />
+        <form onSubmit={submitBooking} className="mt-6 grid gap-3">
+          <input
+            className="w-full rounded-2xl bg-black/60 border border-[#3a2f12] px-4 py-3 text-white outline-none focus:border-[#c8a33a]"
+            placeholder="Your name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
 
-        <input
-          className="lux-border bg-black/40 rounded-xl px-4 py-3 outline-none"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="Phone"
-        />
+          <input
+            className="w-full rounded-2xl bg-black/60 border border-[#3a2f12] px-4 py-3 text-white outline-none focus:border-[#c8a33a]"
+            placeholder="Phone"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
 
-        <select
-          className="lux-border bg-black/40 rounded-xl px-4 py-3 outline-none"
-          value={roomId}
-          onChange={(e) => setRoomId(e.target.value)}
-        >
-          <option value="">Select Room</option>
-          {rooms.map((room) => (
-            <option key={room._id} value={room._id}>
-              {room.title} (PKR {room.price})
+          <select
+            className="w-full rounded-2xl bg-black/60 border border-[#3a2f12] px-4 py-3 text-white outline-none focus:border-[#c8a33a]"
+            value={roomId}
+            onChange={(e) => setRoomId(e.target.value)}
+          >
+            <option value="">
+              {loadingRooms ? "Loading rooms..." : "Select Room"}
             </option>
-          ))}
-        </select>
+            {rooms.map((room) => (
+              <option key={room._id} value={room._id}>
+                {room.title} (PKR {room.price})
+              </option>
+            ))}
+          </select>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <input
-            type="date"
-            className="lux-border bg-black/40 rounded-xl px-4 py-3 outline-none"
-            value={checkIn}
-            onChange={(e) => setCheckIn(e.target.value)}
-          />
-          <input
-            type="date"
-            className="lux-border bg-black/40 rounded-xl px-4 py-3 outline-none"
-            value={checkOut}
-            onChange={(e) => setCheckOut(e.target.value)}
-          />
-        </div>
-
-        <input
-          className="lux-border bg-black/40 rounded-xl px-4 py-3 outline-none"
-          value={guests}
-          onChange={(e) => setGuests(e.target.value)}
-          placeholder="Guests"
-          type="number"
-        />
-
-        {/* price preview */}
-        {selectedRoom && (
-          <div className="text-sm text-white/70">
-            Selected: <span className="lux-gold font-semibold">{selectedRoom.title}</span> • Nights:{" "}
-            <span className="lux-gold font-semibold">{nights}</span> • Total:{" "}
-            <span className="lux-gold font-semibold">PKR {Number(selectedRoom.price) * nights}</span>
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              type="date"
+              className="w-full rounded-2xl bg-black/60 border border-[#3a2f12] px-4 py-3 text-white outline-none focus:border-[#c8a33a]"
+              value={checkIn}
+              onChange={(e) => setCheckIn(e.target.value)}
+            />
+            <input
+              type="date"
+              className="w-full rounded-2xl bg-black/60 border border-[#3a2f12] px-4 py-3 text-white outline-none focus:border-[#c8a33a]"
+              value={checkOut}
+              onChange={(e) => setCheckOut(e.target.value)}
+            />
           </div>
-        )}
 
-        <button className="lux-btn w-full">Submit Booking</button>
+          <input
+            type="number"
+            min={1}
+            className="w-full rounded-2xl bg-black/60 border border-[#3a2f12] px-4 py-3 text-white outline-none focus:border-[#c8a33a]"
+            value={guests}
+            onChange={(e) => setGuests(e.target.value)}
+            placeholder="Guests"
+          />
 
-        {/* ✅ Pay now */}
-        <button type="button" onClick={payNow} className="lux-btn-dark w-full">
-          Pay Now (Stripe)
-        </button>
-      </form>
+          <div className="text-sm text-[#d7c58a] mt-1">
+            Selected: <b>{selectedRoom?.title || "-"}</b> • Nights:{" "}
+            <b>{nights}</b> • Total: <b>PKR {total}</b>
+          </div>
+
+          <button
+            type="submit"
+            className="mt-2 w-full rounded-2xl bg-[#c8a33a] text-black font-bold py-3 hover:opacity-95"
+          >
+            Submit Booking
+          </button>
+
+          <button
+            type="button"
+            onClick={payNow}
+            className="w-full rounded-2xl border border-[#c8a33a] text-[#d7c58a] font-semibold py-3 hover:bg-[#c8a33a]/10"
+          >
+            Pay Now (Stripe)
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

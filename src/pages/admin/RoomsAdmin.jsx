@@ -12,7 +12,7 @@ export default function RoomsAdmin() {
   const [isActive, setIsActive] = useState(true);
 
   const fetchRooms = async () => {
-    const res = await api.get("/api/rooms");
+    const res = await api.get("/api/rooms/all");
     setRooms(res.data || []);
   };
 
