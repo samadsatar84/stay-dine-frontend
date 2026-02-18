@@ -18,7 +18,7 @@ export default function BookRoom() {
       try {
         setLoadingRooms(true);
         const res = await api.get("/api/rooms?active=true");
-        setRooms(res.data || []);
+        setRooms(Array.isArray(res.data) ? res.data : []);
       } catch (e) {
         alert(e?.response?.data?.message || "Rooms load failed");
       } finally {
@@ -48,19 +48,26 @@ export default function BookRoom() {
   const submitBooking = async (e) => {
     e.preventDefault();
 
-    if (!name || !phone || !roomId || !checkIn || !checkOut) {
+    const cleanName = name.trim();
+    const cleanPhone = phone.trim();
+
+    if (!cleanName || !cleanPhone || !roomId || !checkIn || !checkOut) {
       alert("All fields required");
+      return;
+    }
+    if (!nights) {
+      alert("Select valid dates");
       return;
     }
 
     try {
       await api.post("/api/bookings", {
-        name,
-        phone,
-        room: roomId, // ✅ backend expects "room"
+        name: cleanName,
+        phone: cleanPhone,
+        room: roomId, // backend expects "room"
         checkIn,
         checkOut,
-        guests: Number(guests),
+        guests: Number(guests) || 1,
       });
 
       alert("Booking submitted!");
@@ -103,6 +110,7 @@ export default function BookRoom() {
 
         <form onSubmit={submitBooking} className="mt-6 grid gap-3">
           <input
+            required
             className="w-full rounded-2xl bg-black/60 border border-[#3a2f12] px-4 py-3 text-white outline-none focus:border-[#c8a33a]"
             placeholder="Your name"
             value={name}
@@ -110,6 +118,7 @@ export default function BookRoom() {
           />
 
           <input
+            required
             className="w-full rounded-2xl bg-black/60 border border-[#3a2f12] px-4 py-3 text-white outline-none focus:border-[#c8a33a]"
             placeholder="Phone"
             value={phone}
@@ -117,6 +126,7 @@ export default function BookRoom() {
           />
 
           <select
+            required
             className="w-full rounded-2xl bg-black/60 border border-[#3a2f12] px-4 py-3 text-white outline-none focus:border-[#c8a33a]"
             value={roomId}
             onChange={(e) => setRoomId(e.target.value)}
@@ -133,12 +143,14 @@ export default function BookRoom() {
 
           <div className="grid grid-cols-2 gap-3">
             <input
+              required
               type="date"
               className="w-full rounded-2xl bg-black/60 border border-[#3a2f12] px-4 py-3 text-white outline-none focus:border-[#c8a33a]"
               value={checkIn}
               onChange={(e) => setCheckIn(e.target.value)}
             />
             <input
+              required
               type="date"
               className="w-full rounded-2xl bg-black/60 border border-[#3a2f12] px-4 py-3 text-white outline-none focus:border-[#c8a33a]"
               value={checkOut}
@@ -147,11 +159,12 @@ export default function BookRoom() {
           </div>
 
           <input
+            required
             type="number"
             min={1}
             className="w-full rounded-2xl bg-black/60 border border-[#3a2f12] px-4 py-3 text-white outline-none focus:border-[#c8a33a]"
             value={guests}
-            onChange={(e) => setGuests(e.target.value)}
+            onChange={(e) => setGuests(Number(e.target.value) || 1)}
             placeholder="Guests"
           />
 
